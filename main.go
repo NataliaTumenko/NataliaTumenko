@@ -19,7 +19,7 @@ func main() {
 	errorCount := 0
 
 	for {
-		// --- Шаг 1: Получить данные ---
+		// --- Получение данных ---
 		data, err := fetchData()
 		if err != nil {
 			errorCount++
@@ -30,7 +30,7 @@ func main() {
 			continue
 		}
 
-		// --- Шаг 2: Разбить на поля ---
+		// --- Разбивка на поля ---
 		fields := strings.Split(data, ",")
 		if len(fields) != 7 {
 			errorCount++
@@ -41,7 +41,7 @@ func main() {
 			continue
 		}
 
-		// --- Шаг 3: Парсинг значений ---
+		// --- Парсинг значений ---
 		loadAvg, err1 := parseFloat(fields[0])
 		memTotal, err2 := parseFloat(fields[1])
 		memUsed, err3 := parseFloat(fields[2])
@@ -59,40 +59,39 @@ func main() {
 			continue
 		}
 
-		// --- Шаг 4: Сброс счётчика ошибок ---
+		// --- Успех: сброс счётчика ошибок ---
 		errorCount = 0
 
-		// --- Шаг 5: Проверки порогов ---
+		// --- Проверки порогов ---
 
-		// Load Average
+		// Load Average > 30
 		if loadAvg > 30 {
 			fmt.Printf("Load Average is too high: %g\n", loadAvg)
 		}
 
-		// Memory (80%)
+		// Memory > 80%
 		if memTotal > 0 {
-			usage := (memUsed / memTotal) * 100
-			if usage > 80 {
-				fmt.Printf("Memory usage too high: %.0f%%\n", usage)
+			usagePercent := (memUsed / memTotal) * 100
+			if usagePercent > 80 {
+				fmt.Printf("Memory usage too high: %.0f%%\n", usagePercent)
 			}
 		}
 
-		// Disk (90%)
+		// Disk > 90% used → free space in Mb
 		if diskTotal > 0 {
-			usedPerc := (diskUsed / diskTotal) * 100
-			if usedPerc > 90 {
+			usedPercent := (diskUsed / diskTotal) * 100
+			if usedPercent > 90 {
 				freeBytes := diskTotal - diskUsed
 				freeMB := freeBytes / (1024 * 1024)
 				fmt.Printf("Free disk space is too low: %.0f Mb left\n", freeMB)
 			}
 		}
 
-		// Network (90%)
+		// Network > 90% used → free bandwidth in Mbit/s
 		if netTotal > 0 {
-			usedPerc := (netUsed / netTotal) * 100
-			if usedPerc > 90 {
+			usedPercent := (netUsed / netTotal) * 100
+			if usedPercent > 90 {
 				freeBytesPerSec := netTotal - netUsed
-				// байты/сек → мегабиты/сек: *8 / 1_000_000
 				freeMbitPerSec := freeBytesPerSec * 8 / 1_000_000.0
 				fmt.Printf("Network bandwidth usage high: %.0f Mbit/s available\n", freeMbitPerSec)
 			}
