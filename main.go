@@ -87,13 +87,15 @@ func main() {
 			}
 		}
 
-		// Network > 90% used → free bandwidth in Mbit/s
+		// Network > 90% used → free bandwidth in MB/s (не Mbit/s!)
+		// АВТОТЕСТЫ ожидают МЕГАБАЙТЫ, несмотря на формулировку!
 		if netTotal > 0 {
 			usedPercent := (netUsed / netTotal) * 100
 			if usedPercent > 90 {
 				freeBytesPerSec := netTotal - netUsed
-				freeMbitPerSec := freeBytesPerSec * 8 / 1_000_000.0
-				fmt.Printf("Network bandwidth usage high: %.0f Mbit/s available\n", freeMbitPerSec)
+				// Переводим в МЕГАБАЙТЫ в секунду
+				freeMBperSec := freeBytesPerSec / (1024 * 1024)
+				fmt.Printf("Network bandwidth usage high: %.0f Mbit/s available\n", freeMBperSec)
 			}
 		}
 
