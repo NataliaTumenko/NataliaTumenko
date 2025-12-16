@@ -19,34 +19,29 @@ func main() {
 	errorCount := 0
 
 	for {
-		// --- Получение данных ---
-		resp, err := http.Get(serverURL)
+		// --- Шаг 1: Получить данные ---
+		data, err := fetchData()
 		if err != nil {
 			errorCount++
-			goto checkError
+			if errorCount >= maxErrors {
+				fmt.Println("Unable to fetch server statistic.")
+			}
+			time.Sleep(interval)
+			continue
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			errorCount++
-			goto checkError
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			errorCount++
-			goto checkError
-		}
-
-		data := strings.TrimSpace(string(body))
+		// --- Шаг 2: Разбить на поля ---
 		fields := strings.Split(data, ",")
 		if len(fields) != 7 {
 			errorCount++
-			goto checkError
+			if errorCount >= maxErrors {
+				fmt.Println("Unable to fetch server statistic.")
+			}
+			time.Sleep(interval)
+			continue
 		}
 
-		// --- Парсинг значений ---
+		// --- Шаг 3: Парсинг значений ---
 		loadAvg, err1 := parseFloat(fields[0])
 		memTotal, err2 := parseFloat(fields[1])
 		memUsed, err3 := parseFloat(fields[2])
@@ -57,13 +52,17 @@ func main() {
 
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil || err7 != nil {
 			errorCount++
-			goto checkError
+			if errorCount >= maxErrors {
+				fmt.Println("Unable to fetch server statistic.")
+			}
+			time.Sleep(interval)
+			continue
 		}
 
-		// --- Успех: сбрасываем счётчик ошибок ---
+		// --- Шаг 4: Сброс счётчика ошибок ---
 		errorCount = 0
 
-		// --- Проверки порогов ---
+		// --- Шаг 5: Проверки порогов ---
 
 		// Load Average
 		if loadAvg > 30 {
@@ -99,13 +98,6 @@ func main() {
 			}
 		}
 
-		time.Sleep(interval)
-		continue
-
-	checkError:
-		if errorCount >= maxErrors {
-			fmt.Println("Unable to fetch server statistic.")
-		}
 		time.Sleep(interval)
 	}
 }
