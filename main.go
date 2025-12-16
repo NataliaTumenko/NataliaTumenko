@@ -110,6 +110,25 @@ func main() {
 	}
 }
 
+func fetchData() (string, error) {
+	resp, err := http.Get(serverURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("non-200 status: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(body)), nil
+}
+
 func parseFloat(s string) (float64, error) {
 	s = strings.TrimSpace(s)
 	return strconv.ParseFloat(s, 64)
