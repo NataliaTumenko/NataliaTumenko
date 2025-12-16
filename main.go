@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,113 +10,107 @@ import (
 )
 
 const (
-	url             = "http://srv.msk01.gigacorp.local/_stats"
-	checkInterval   = 5 * time.Second
-	maxFailures     = 3
+	serverURL = "http://srv.msk01.gigacorp.local/_stats"
+	interval  = 5 * time.Second
+	maxErrors = 3
 )
 
 func main() {
-	failCount := 0
+	errorCount := 0
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	ticker := time.NewTicker(checkInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		resp, err := client.Get(url)
-		if err != nil || resp.StatusCode != http.StatusOK {
-			if resp != nil {
-				resp.Body.Close()
-			}
-			failCount++
-			if failCount >= maxFailures {
-				fmt.Println("Unable to fetch server statistic")
-			}
-			continue
+	for {
+		// --- Получение данных ---
+		resp, err := http.Get(serverURL)
+		if err != nil {
+			errorCount++
+			goto checkError
 		}
 
-		buf := make([]byte, 1024)
-		n, err := resp.Body.Read(buf)
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			errorCount++
+			goto checkError
+		}
+
+		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		if err != nil && err.Error() != "EOF" {
-			failCount++
-			if failCount >= maxFailures {
-				fmt.Println("Unable to fetch server statistic")
-			}
-			continue
+		if err != nil {
+			errorCount++
+			goto checkError
 		}
 
-		body := strings.TrimSpace(string(buf[:n]))
-		parts := strings.Split(body, ",")
-		if len(parts) != 7 {
-			failCount++
-			if failCount >= maxFailures {
-				fmt.Println("Unable to fetch server statistic")
-			}
-			continue
+		data := strings.TrimSpace(string(body))
+		fields := strings.Split(data, ",")
+		if len(fields) != 7 {
+			errorCount++
+			goto checkError
 		}
 
-		// Сброс счётчика ошибок при успешном парсинге
-		failCount = 0
+		// --- Парсинг значений ---
+		loadAvg, err1 := parseFloat(fields[0])
+		memTotal, err2 := parseFloat(fields[1])
+		memUsed, err3 := parseFloat(fields[2])
+		diskTotal, err4 := parseFloat(fields[3])
+		diskUsed, err5 := parseFloat(fields[4])
+		netTotal, err6 := parseFloat(fields[5])
+		netUsed, err7 := parseFloat(fields[6])
 
-		// Parse all values
-		loadAvg, err1 := parseFloat64(parts[0])
-		totalMem, err2 := parseFloat64(parts[1])
-		usedMem, err3 := parseFloat64(parts[2])
-		totalDisk, err4 := parseFloat64(parts[3])
-		usedDisk, err5 := parseFloat64(parts[4])
-		totalNet, err6 := parseFloat64(parts[5])
-		usedNet, err7 := parseFloat64(parts[6])
-
-		if err1 != nil || err2 != nil || err3 != nil ||
-			err4 != nil || err5 != nil || err6 != nil || err7 != nil {
-			failCount++
-			if failCount >= maxFailures {
-				fmt.Println("Unable to fetch server statistic")
-			}
-			continue
+		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil || err7 != nil {
+			errorCount++
+			goto checkError
 		}
 
-		// 1. Load Average
+		// --- Успех: сбрасываем счётчик ошибок ---
+		errorCount = 0
+
+		// --- Проверки порогов ---
+
+		// Load Average
 		if loadAvg > 30 {
-			fmt.Printf("Load Average is too high: %.6g\n", loadAvg)
+			fmt.Printf("Load Average is too high: %g\n", loadAvg)
 		}
 
-		// 2. Memory usage > 80%
-		if totalMem > 0 {
-			memPerc := (usedMem / totalMem) * 100
-			if memPerc > 80 {
-				fmt.Printf("Memory usage too high: %d%%\n", int(memPerc))
+		// Memory (80%)
+		if memTotal > 0 {
+			usage := (memUsed / memTotal) * 100
+			if usage > 80 {
+				fmt.Printf("Memory usage too high: %.0f%%\n", usage)
 			}
 		}
 
-		// 3. Free disk space < 10% → output free MB
-		if totalDisk > 0 {
-			freeDisk := totalDisk - usedDisk
-			freePerc := (freeDisk / totalDisk) * 100
-			if freePerc < 10 {
-				freeMB := int64(freeDisk / (1024 * 1024))
-				fmt.Printf("Free disk space is too low: %d Mb left\n", freeMB)
+		// Disk (90%)
+		if diskTotal > 0 {
+			usedPerc := (diskUsed / diskTotal) * 100
+			if usedPerc > 90 {
+				freeBytes := diskTotal - diskUsed
+				freeMB := freeBytes / (1024 * 1024)
+				fmt.Printf("Free disk space is too low: %.0f Mb left\n", freeMB)
 			}
 		}
 
-		// 4. Network usage > 90% → output free bandwidth in Mbit/s
-		if totalNet > 0 {
-			netPerc := (usedNet / totalNet) * 100
-			if netPerc > 90 {
-				freeBps := totalNet - usedNet                      // bytes per second
-				freeMbitps := (freeBps * 8) / (1000 * 1000)        // convert to Mbit/s
-				fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", int(freeMbitps))
+		// Network (90%)
+		if netTotal > 0 {
+			usedPerc := (netUsed / netTotal) * 100
+			if usedPerc > 90 {
+				freeBytesPerSec := netTotal - netUsed
+				// байты/сек → мегабиты/сек: *8 / 1_000_000
+				freeMbitPerSec := freeBytesPerSec * 8 / 1_000_000.0
+				fmt.Printf("Network bandwidth usage high: %.0f Mbit/s available\n", freeMbitPerSec)
 			}
 		}
+
+		time.Sleep(interval)
+		continue
+
+	checkError:
+		if errorCount >= maxErrors {
+			fmt.Println("Unable to fetch server statistic.")
+		}
+		time.Sleep(interval)
 	}
 }
 
-func parseFloat64(s string) (float64, error) {
-	// Удаляем возможные пробелы
+func parseFloat(s string) (float64, error) {
 	s = strings.TrimSpace(s)
 	return strconv.ParseFloat(s, 64)
 }
