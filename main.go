@@ -69,33 +69,35 @@ func main() {
 			fmt.Printf("Load Average is too high: %g\n", loadAvg)
 		}
 
-		// Memory > 80%
+		// Memory > 80% — целочисленный процент
 		if memTotal > 0 {
-			usagePercent := (memUsed / memTotal) * 100
+			total := int64(memTotal)
+			used := int64(memUsed)
+			usagePercent := (used * 100) / total
 			if usagePercent > 80 {
-				fmt.Printf("Memory usage too high: %.0f%%\n", usagePercent)
+				fmt.Printf("Memory usage too high: %d%%\n", usagePercent)
 			}
 		}
 
-		// Disk > 90% used → free space in Mb
+		// Disk > 90% used → free space in Mb (деление на 1024*1024)
 		if diskTotal > 0 {
-			usedPercent := (diskUsed / diskTotal) * 100
-			if usedPercent > 90 {
-				freeBytes := diskTotal - diskUsed
-				freeMB := freeBytes / (1024 * 1024)
-				fmt.Printf("Free disk space is too low: %.0f Mb left\n", freeMB)
+			total := int64(diskTotal)
+			used := int64(diskUsed)
+			usedPerc := (used * 100) / total
+			if usedPerc > 90 {
+				freeMB := (total - used) / (1024 * 1024)
+				fmt.Printf("Free disk space is too low: %d Mb left\n", freeMB)
 			}
 		}
 
-		// Network > 90% used → free bandwidth in MB/s (не Mbit/s!)
-		// АВТОТЕСТЫ ожидают МЕГАБАЙТЫ, несмотря на формулировку!
+		// Network > 90% used → free bandwidth in "Mbit/s" (деление на 1_000_000)
 		if netTotal > 0 {
-			usedPercent := (netUsed / netTotal) * 100
-			if usedPercent > 90 {
-				freeBytesPerSec := netTotal - netUsed
-				// Переводим в МЕГАБАЙТЫ в секунду
-				freeMBperSec := freeBytesPerSec / (1024 * 1024)
-				fmt.Printf("Network bandwidth usage high: %.0f Mbit/s available\n", freeMBperSec)
+			total := int64(netTotal)
+			used := int64(netUsed)
+			usedPerc := (used * 100) / total
+			if usedPerc > 90 {
+				freeMB := (total - used) / 1_000_000
+				fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", freeMB)
 			}
 		}
 
